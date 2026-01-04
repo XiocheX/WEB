@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-gray-950 text-gray-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vault Shop - Secure Crypto Products</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            neon: '#00ff9d',
+            dark: '#0a0a0a',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glow { box-shadow: 0 0 20px rgba(0, 255, 157, 0.5); }
+    .card-hover:hover { transform: translateY(-8px); transition: all 0.3s; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-gray-950 to-black">
+  <header class="py-8 text-center">
+    <h1 class="text-5xl font-bold text-neon tracking-wider animate-pulse">VAULT SHOP</h1>
+    <p class="mt-2 text-lg text-gray-400">Secure • Anonymous • Instant Delivery</p>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-12">
+    <div id="product-list" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      {% for p in products %}
+      <div class="bg-gray-900 rounded-xl overflow-hidden shadow-2xl glow card-hover transform transition-all">
+        <div class="h-48 bg-gradient-to-br from-purple-900 to-indigo-900 flex items-center justify-center">
+          <span class="text-6xl">🔒</span> <!-- Placeholder icon -->
+        </div>
+        <div class="p-6">
+          <h3 class="text-2xl font-semibold text-white">{{ p[1] }}</h3>
+          <p class="mt-2 text-neon text-xl font-bold">${{ "%.2f"|format(p[2]) }} {{ p[3] }}</p>
+          <p class="mt-3 text-gray-400">{{ p[4] or "Premium access • Instant delivery" }}</p>
+          <button 
+            onclick="buyProduct({{ p[0] }}, '{{ p[1] }}')"
+            class="mt-6 w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-4 px-6 rounded-lg transition transform hover:scale-105">
+            BUY NOW
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Status Section (hidden initially) -->
+    <div id="status-section" class="hidden mt-12 bg-gray-900 rounded-xl p-8 shadow-2xl glow">
+      <h2 class="text-3xl font-bold text-center text-neon mb-6">Your Order Status</h2>
+      <p id="order-code" class="text-xl text-center text-gray-300 mb-4"></p>
+      <div id="status-message" class="text-center text-lg"></div>
+      <div id="delivery-form" class="hidden mt-8">
+        <p class="text-center text-green-400 text-xl mb-4">Payment Confirmed! 🎉</p>
+        <p class="text-center text-gray-400 mb-6">Choose how to receive your product:</p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <button onclick="chooseDelivery('Telegram')" class="bg-purple-700 hover:bg-purple-600 text-white py-4 px-8 rounded-lg text-lg">Telegram</button>
+          <button onclick="chooseDelivery('Email')" class="bg-indigo-700 hover:bg-indigo-600 text-white py-4 px-8 rounded-lg text-lg">Email</button>
+        </div>
+        <div id="details-input" class="mt-6 hidden">
+          <input id="details-field" type="text" placeholder="Enter details or email..." class="w-full p-4 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-neon">
+          <button onclick="submitDelivery()" class="mt-4 w-full bg-neon text-black font-bold py-4 rounded-lg hover:bg-green-400 transition">Submit</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="py-8 text-center text-gray-500">
+    <p>© 2026 Vault Shop • Secure & Anonymous</p>
+  </footer>
+
+  <script>
+    const activeOrder = localStorage.getItem('activeOrder');
+
+    if (activeOrder) {
+      document.getElementById('status-section').classList.remove('hidden');
+      document.getElementById('order-code').textContent = `Order: ${activeOrder}`;
+      checkStatus(activeOrder);
+      setInterval(() => checkStatus(activeOrder), 15000); // Poll every 15s
+    }
+
+    function buyProduct(id, name) {
+      if (confirm(`Buy ${name}?`)) {
+        fetch('/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: id })
+        })
+        .then(res => res.json())
+        .then(data => {
+          localStorage.setItem('activeOrder', data.order_id);
+          document.getElementById('status-section').classList.remove('hidden');
+          document.getElementById('order-code').textContent = `Order: ${data.order_id}\nSave this code!`;
+          document.getElementById('status-message').innerHTML = 'Payment pending... Open the link in the new tab!';
+          window.open(`/pay?order=${data.order_id}`, '_blank'); // Placeholder - replace with real link
+          checkStatus(data.order_id);
+        })
+        .catch(err => alert('Error creating order'));
+      }
+    }
+
+    function checkStatus(orderId) {
+      fetch(`/order-status/${orderId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.paid) {
+            document.getElementById('status-message').innerHTML = 'Payment Confirmed! 🎉';
+            document.getElementById('delivery-form').classList.remove('hidden');
+          } else {
+            document.getElementById('status-message').innerHTML = 'Waiting for payment...';
+          }
+        });
+    }
+
+    function chooseDelivery(method) {
+      document.getElementById('details-input').classList.remove('hidden');
+      document.getElementById('details-field').placeholder = method === 'Telegram' ? 'Enter Telegram details...' : 'Enter email (cannot change later!)';
+      window.deliveryMethod = method;
+    }
+
+    function submitDelivery() {
+      const details = document.getElementById('details-field').value.trim();
+      if (!details) return alert('Enter details');
+      fetch('/submit-delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: window.deliveryMethod, details })
+      })
+      .then(() => alert('Delivery request sent!'))
+      .catch(() => alert('Error sending request'));
+    }
+  </script>
+</body>
+</html>
